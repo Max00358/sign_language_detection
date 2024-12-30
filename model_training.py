@@ -1,9 +1,12 @@
 # This file is used to train classifier model using gesture landscape data
 import pickle
-from sklearn.ensemble import RandomForestClassifier
+import numpy as np
+
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import SGDClassifier
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-import numpy as np
 
 data_dict = pickle.load(open('./data.pickle', 'rb'))
 
@@ -30,18 +33,28 @@ x_train, x_test, y_train, y_test = train_test_split(data,
                                                     # training & testing datasets
                                                     stratify=labels)
 
-model = RandomForestClassifier()
+# Scaler ensures the features in your dataset are scaled
+# (typically to zero mean and unit variance)
+model = Pipeline([
+    ('standardscaler', StandardScaler()),
+    ('sgdclassifier', SGDClassifier(
+        loss='log_loss',           # Logistic regression loss for probabilistic predictions
+        max_iter=1000,             # Maximum number of iterations
+        tol=1e-3,                  # Convergence tolerance
+        learning_rate='optimal',   # Adaptive learning rate
+        eta0=0.01,                 # For better convergence
+        alpha=0.001,               # Regularization strength
+        random_state=42            # For reproducibility
+    ))
+])
 model.fit(x_train, y_train)
 
 # Uses the trained model to predict labels(y_predict) for the test dataset(x_test)
-y_predict = model.predict(x_test)
 # Compares the predicted labels (y_predict) with the actual labels (y_test)
+y_predict = model.predict(x_test)
 score = accuracy_score(y_predict, y_test)
 
-print(f'{score * 100}% of samples were classified correctly!')
-
-# Saves the trained model to a pickle file (model.p) for later use:
-# This allows you to load the model in another script at a later time w/o retraining it
+print(f'{score * 100:.2f}% of samples were classified correctly!')
 f = open('model.p', 'wb')
 pickle.dump({'model': model}, f)
 f.close()

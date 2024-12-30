@@ -4,19 +4,21 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from sklearn.linear_model import SGDClassifier
-from sklearn.preprocessing import StandardScaler
+# Load model.p
+# model_dict = pickle.load(open('./model.p', 'rb'))
+# pipeline_model = model_dict['model']
+# SGD_model = pipeline_model.named_steps['sgdclassifier']
+# scaler = pipeline_model.named_steps['standardscaler']
 
-model_dict = pickle.load(open('./model.p', 'rb'))
-model = model_dict['model']
-# SGD_model = model.named_steps['sgdclassifier']
-# scalar = model.named_steps['standardscaler']
+# Load SGD_model.p
+model_dict = pickle.load(open('./SGD_model.p', 'rb'))
+SGD_model = model_dict['sgdclassifier']
+scaler = model_dict['scaler']
 
 cap = cv2.VideoCapture(0)
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
-# hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
 hands = mp_hands.Hands(
     static_image_mode=False,
     min_detection_confidence=0.8,
@@ -54,6 +56,7 @@ labels_dict = {
                 26: 'SPACE',
                 27: 'YVL',
                 }
+dict_keys = list(labels_dict.keys())
 
 while True:
     ret, frame = cap.read()
@@ -110,9 +113,10 @@ while True:
             x2 = int(max_x * W) + 10
             y2 = int(max_y * H) + 10
 
-            prediction = model.predict([np.asarray(normalized_data)])
+            scaled_data = scaler.transform(np.asarray([normalized_data]))
+            prediction = SGD_model.predict(scaled_data)
             predicted_character = labels_dict[int(prediction[0])]
-            probabilities = model.predict_proba([np.asarray(normalized_data)])
+            probabilities = SGD_model.predict_proba([np.asarray(normalized_data)])
 
     if predicted_character:
         confidence = np.max(probabilities) * 100
@@ -133,7 +137,17 @@ while True:
         break
     if key == ord('c') and predicted_character:  # User wants to correct
         print(f"Current prediction: {predicted_character}")
+        correct_label = input("Enter correct label: ").strip().upper()
+        correct_index = [str(i) for i, label in labels_dict.items() if label == correct_label]
+        if correct_index:
+            correct_label = correct_index[0]
+            SGD_model.partial_fit(scaled_data, [correct_label], classes=SGD_model.classes_)
+            with open('SGD_model.p', 'wb') as f:
+                pickle.dump({'sgdclassifier': SGD_model, 'scaler': scaler}, f)
 
+            print("Model updated with corrected label.")
+        else:
+            print("Input label incorrect or does not exist :(")
 
 cap.release()
 cv2.destroyAllWindows()
